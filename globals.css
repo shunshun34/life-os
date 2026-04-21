@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.lifeos-light {
+  color-scheme: light;
+}
+
+.lifeos-light section:not(.holo-hero-card),
+.lifeos-light .lifeos-panel,
+.lifeos-light .lifeos-card {
+  background: #ffffff !important;
+  border-color: #d8e3f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.lifeos-light [class*="bg-slate-950"],
+.lifeos-light [class*="bg-slate-900"],
+.lifeos-light [class*="bg-slate-800"],
+.lifeos-light [class*="bg-slate-700"],
+.lifeos-light [class*="bg-gray-950"],
+.lifeos-light [class*="bg-gray-900"],
+.lifeos-light [class*="bg-black"] {
+  background: #f8fbff !important;
+  color: #0f172a !important;
+  border-color: #d8e3f0 !important;
+  background-image: none !important;
+}
+
+.lifeos-light [class*="from-slate-900"],
+.lifeos-light [class*="via-slate-900"],
+.lifeos-light [class*="to-slate-900"],
+.lifeos-light [class*="to-cyan-950"] {
+  background-image: none !important;
+}
+
+.lifeos-light [class*="text-white"],
+.lifeos-light [class*="text-slate-100"],
+.lifeos-light [class*="text-slate-200"],
+.lifeos-light [class*="text-slate-300"],
+.lifeos-light [class*="text-slate-400"],
+.lifeos-light [class*="text-slate-500"] {
+  color: #475569 !important;
+}
+
+.lifeos-light h1,
+.lifeos-light h2,
+.lifeos-light h3,
+.lifeos-light h4,
+.lifeos-light h5,
+.lifeos-light h6,
+.lifeos-light .font-bold,
+.lifeos-light .font-semibold {
+  color: #0f172a;
+}
+
+.lifeos-light .border-slate-900,
+.lifeos-light .border-slate-800,
+.lifeos-light .border-slate-700,
+.lifeos-light .border-slate-600,
+.lifeos-light .border-slate-500,
+.lifeos-light .border-slate-400 {
+  border-color: #d8e3f0 !important;
+}
+
+.lifeos-light input,
+.lifeos-light textarea,
+.lifeos-light select {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cfd9e8 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.lifeos-light input::placeholder,
+.lifeos-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.lifeos-light .bg-slate-200 {
+  background: #e8eef6 !important;
+  color: #0f172a !important;
+}
+
+.lifeos-light [class*="bg-red-500/10"] {
+  background: #fff1f2 !important;
+  color: #be123c !important;
+}
+.lifeos-light [class*="border-red-500/30"] {
+  border-color: #fecdd3 !important;
+}
+
+.lifeos-light [class*="bg-amber-500/10"],
+.lifeos-light [class*="bg-amber-400/10"] {
+  background: #fff7ed !important;
+  color: #c2410c !important;
+}
+
+.lifeos-light [class*="bg-emerald-400/20"],
+.lifeos-light [class*="bg-emerald-500/20"] {
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+}
+.lifeos-light [class*="border-emerald-400/40"],
+.lifeos-light [class*="border-emerald-500/30"] {
+  border-color: #a7f3d0 !important;
+}
+
+.lifeos-light [class*="bg-cyan-500/10"] {
+  background: #ecfeff !important;
+  color: #0e7490 !important;
+}
+.lifeos-light [class*="border-cyan-500/30"] {
+  border-color: #a5f3fc !important;
+}
+
+.lifeos-light .holo-hero-card {
+  color: white !important;
+}
+
+.lifeos-light .holo-hero-card h1,
+.lifeos-light .holo-hero-card h2,
+.lifeos-light .holo-hero-card h3,
+.lifeos-light .holo-hero-card .text-white,
+.lifeos-light .holo-hero-card .text-slate-100,
+.lifeos-light .holo-hero-card .text-slate-200,
+.lifeos-light .holo-hero-card .text-slate-300 {
+  color: white !important;
+}
+
+.lifeos-light .holo-hero-card .text-slate-400 {
+  color: rgba(255,255,255,0.82) !important;
+}
+
+.lifeos-light .holo-theme-stat,
+.lifeos-light .holo-theme-chip {
+  background: rgba(255,255,255,0.92) !important;
+  color: #0f172a !important;
+  border-color: rgba(255,255,255,0.6) !important;
+}
+
+.lifeos-light .holo-theme-accent {
+  color: var(--holo-accent, #38bdf8) !important;
+}
+
+.lifeos-light .holo-theme-button {
+  background: var(--holo-accent, #38bdf8) !important;
+  color: white !important;
+}
+
+.lifeos-light .holo-theme-button:hover {
+  filter: brightness(0.96);
+}
+
+.lifeos-light .travel-map-shell {
+  background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%) !important;
+  border-color: #d8e3f0 !important;
+}
+
+.lifeos-light .travel-map-prefecture {
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.lifeos-light .travel-map-prefecture:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.98);
+}

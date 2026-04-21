@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.lifeos-light {
+  color-scheme: light;
+}
+
+.lifeos-light section:not(.holo-hero-card),
+.lifeos-light .lifeos-panel,
+.lifeos-light .lifeos-card {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.lifeos-light [class*="bg-slate-900"],
+.lifeos-light [class*="bg-slate-950"],
+.lifeos-light [class*="bg-slate-800"],
+.lifeos-light [class*="bg-slate-700"],
+.lifeos-light [class*="from-slate-900"],
+.lifeos-light [class*="via-slate-900"],
+.lifeos-light [class*="to-cyan-950"] {
+  background-image: none !important;
+}
+
+.lifeos-light input,
+.lifeos-light textarea,
+.lifeos-light select {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.lifeos-light input::placeholder,
+.lifeos-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.lifeos-light h1,
+.lifeos-light h2,
+.lifeos-light h3,
+.lifeos-light h4,
+.lifeos-light .text-white,
+.lifeos-light .text-slate-100,
+.lifeos-light .text-slate-200,
+.lifeos-light .text-slate-300 {
+  color: #0f172a !important;
+}
+
+.lifeos-light .text-slate-400,
+.lifeos-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+.lifeos-light .border-slate-700,
+.lifeos-light .border-slate-800,
+.lifeos-light .border-slate-900 {
+  border-color: #e2e8f0 !important;
+}
+
+.lifeos-light .bg-cyan-400,
+.lifeos-light .bg-cyan-300 {
+  background: #22d3ee !important;
+  color: #083344 !important;
+}
+
+.lifeos-light .bg-slate-200 {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.lifeos-light .holo-hero-card {
+  color: white !important;
+}
+
+.lifeos-light .holo-hero-card h1,
+.lifeos-light .holo-hero-card h2,
+.lifeos-light .holo-hero-card h3,
+.lifeos-light .holo-hero-card .text-white,
+.lifeos-light .holo-hero-card .text-slate-100,
+.lifeos-light .holo-hero-card .text-slate-200,
+.lifeos-light .holo-hero-card .text-slate-300 {
+  color: white !important;
+}
+
+.lifeos-light .holo-hero-card .text-slate-400 {
+  color: rgba(255,255,255,0.82) !important;
+}
+
+.lifeos-light .holo-theme-stat,
+.lifeos-light .holo-theme-chip {
+  background: rgba(255,255,255,0.92) !important;
+  color: #0f172a !important;
+  border-color: rgba(255,255,255,0.6) !important;
+}
+
+.lifeos-light .holo-theme-accent {
+  color: var(--holo-accent, #38bdf8) !important;
+}
+
+.lifeos-light .holo-theme-button {
+  background: var(--holo-accent, #38bdf8) !important;
+  color: white !important;
+}
+
+.lifeos-light .holo-theme-button:hover {
+  filter: brightness(0.96);
+}
+
+
+/* final white cleanup */
+.lifeos-light .bg-slate-900,
+.lifeos-light .bg-slate-950,
+.lifeos-light .bg-slate-800,
+.lifeos-light .bg-slate-700,
+.lifeos-light .bg-slate-900\/80,
+.lifeos-light .bg-slate-800\/80,
+.lifeos-light .bg-slate-950\/40,
+.lifeos-light .bg-slate-950\/60,
+.lifeos-light .bg-slate-950\/70 { background: #fff !important; color: #0f172a !important; border-color: #e2e8f0 !important; }
+.lifeos-light [class*="bg-slate-9"], .lifeos-light [class*="bg-slate-8"] { background: #fff !important; }
+.lifeos-light [class*="text-white"], .lifeos-light [class*="text-slate-100"], .lifeos-light [class*="text-slate-200"], .lifeos-light [class*="text-slate-300"] { color: #0f172a !important; }
+.lifeos-light [class*="border-slate-700"] { border-color: #e2e8f0 !important; }
+.lifeos-light [class*="bg-slate-950/40"], .lifeos-light [class*="bg-slate-950/60"], .lifeos-light [class*="bg-slate-950/70"] { background: #f8fafc !important; }
