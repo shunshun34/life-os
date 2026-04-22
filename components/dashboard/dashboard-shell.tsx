@@ -13,7 +13,7 @@ type DashboardShellProps = {
 };
 
 const TAB_ACCENTS: Record<
-  MainTab,
+  string,
   {
     gradient: string;
     badge: string;
