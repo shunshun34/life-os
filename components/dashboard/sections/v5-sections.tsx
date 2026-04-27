@@ -359,13 +359,170 @@ export function WeeklyReviewV5Section() {
 }
 
 export function MoneyV5Section() {
-  const [monthlyLog, setMonthlyLog] = useState<any>(null); const [entries, setEntries] = useState<any[]>([]); const [msg, setMsg] = useState<Msg>(null); const month = monthISO(); const today = todayISO();
-  async function load() { const uid = await userId(); const monthStart = month + "-01"; const monthEnd = month + "-31"; const [{ data: monthly }, { data: monthEntries }] = await Promise.all([supabase.from("money_logs").select("*").eq("user_id", uid).eq("month", month).maybeSingle(), supabase.from("money_entries").select("*").eq("user_id", uid).gte("entry_date", monthStart).lte("entry_date", monthEnd).order("entry_date", { ascending: false }).order("created_at", { ascending: false })]); setMonthlyLog(monthly); setEntries(monthEntries ?? []); }
+  const [monthlyLog, setMonthlyLog] = useState<any>(null);
+  const [entries, setEntries] = useState<any[]>([]);
+  const [msg, setMsg] = useState<Msg>(null);
+  const month = monthISO();
+  const today = todayISO();
+  const yen = (v: number) => new Intl.NumberFormat("ja-JP").format(Math.round(v));
+
+async function load() {
+  const uid = await userId();
+  const monthStart = month + "-01";
+  const d = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0);
+  const monthEnd = d.toISOString().slice(0, 10);
+    const [{ data: monthly, error: monthlyError }, { data: monthEntries, error: entriesError }] = await Promise.all([
+      supabase.from("money_logs").select("*").eq("user_id", uid).eq("month", month).maybeSingle(),
+      supabase.from("money_entries").select("*").eq("user_id", uid).gte("entry_date", monthStart).lte("entry_date", monthEnd).order("entry_date", { ascending: false }).order("created_at", { ascending: false }),
+    ]);
+    if (monthlyError) throw new Error(monthlyError.message);
+    if (entriesError) throw new Error(entriesError.message);
+    setMonthlyLog(monthly);
+    setEntries(monthEntries ?? []);
+  }
+
   useEffect(() => { load().catch(e => setMsg({ type: "error", text: e.message })); }, []);
-  const incomeTotal = entries.filter((e) => e.entry_type === "income").reduce((sum, e) => sum + Number(e.amount ?? 0), 0); const expenseTotal = entries.filter((e) => e.entry_type === "expense").reduce((sum, e) => sum + Number(e.amount ?? 0), 0); const balance = incomeTotal - expenseTotal; const yen = (v: number) => new Intl.NumberFormat("ja-JP").format(Math.round(v));
-  async function saveEntry(fd: FormData) { try { const uid = await userId(); await insert("money_entries", { user_id: uid, entry_date: String(fd.get("entry_date") || today), entry_type: String(fd.get("entry_type") || "expense"), category: String(fd.get("category") || "その他"), title: String(fd.get("title") || ""), amount: num(fd.get("amount")) ?? 0, memo: String(fd.get("memo") || ""), visibility: "private" }); setMsg({ type: "ok", text: "お金メモを追加しました。" }); await load(); } catch (e) { setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" }); } }
-  async function saveMonthly(fd: FormData) { try { const uid = await userId(); await upsert("money_logs", { user_id: uid, month: String(fd.get("month") || month), income: incomeTotal, expense: expenseTotal, investment: num(fd.get("investment")), nisa_checked: fd.get("nisa_checked") === "on", memo: String(fd.get("memo") || ""), updated_at: new Date().toISOString() }, "user_id,month"); setMsg({ type: "ok", text: "月次確認を保存しました。" }); await load(); } catch (e) { setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" }); } }
-  return <div className="space-y-6"><Message msg={msg}/><div className="grid gap-4 md:grid-cols-3"><Card><div className="text-sm text-slate-500">今月の収入</div><div className="mt-2 text-3xl font-black">¥{yen(incomeTotal)}</div></Card><Card><div className="text-sm text-slate-500">今月の支出</div><div className="mt-2 text-3xl font-black">¥{yen(expenseTotal)}</div></Card><Card><div className="text-sm text-slate-500">差分</div><div className={(balance >= 0 ? "text-emerald-600" : "text-red-600") + " mt-2 text-3xl font-black"}>¥{yen(balance)}</div></Card></div><Card><H2>お金メモ追加</H2><p className="mt-2 text-sm text-slate-500">使った額や収入を、その都度メモします。</p><form action={saveEntry} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="日付" name="entry_date" type="date" defaultValue={today}/><Select label="種別" name="entry_type"><option value="expense">支出</option><option value="income">収入</option></Select><Input label="カテゴリ" name="category" placeholder="食費 / 交通 / 美容 / 趣味など"/><Input label="金額" name="amount" type="number"/><Input label="タイトル" name="title" placeholder="例：昼食、制汗剤、交通費"/><Input label="メモ" name="memo"/><div className="md:col-span-2"><Btn>メモ追加</Btn></div></form></Card><Card><H2>NISA・月次確認</H2><form action={saveMonthly} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="月" name="month" type="month" defaultValue={monthlyLog?.month??month}/><Input label="投資額" name="investment" type="number" defaultValue={monthlyLog?.investment}/><label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="nisa_checked" defaultChecked={!!monthlyLog?.nisa_checked}/>NISA確認済み</label><Input label="月次メモ" name="memo" defaultValue={monthlyLog?.memo}/><div className="md:col-span-2"><Btn>月次確認を保存</Btn></div></form></Card><Card><H2>今月のメモ履歴</H2><div className="mt-4 space-y-3">{entries.map((entry)=><div key={entry.id} className="rounded-2xl bg-slate-50 p-4 text-sm"><div className="flex items-start justify-between gap-3"><div><div className="font-bold text-slate-900">{entry.title || entry.category}</div><div className="text-slate-500">{entry.entry_date} / {entry.category} / {entry.entry_type === "income" ? "収入" : "支出"}</div>{entry.memo ? <div className="mt-1 text-slate-600">{entry.memo}</div> : null}</div><div className={(entry.entry_type === "income" ? "text-emerald-600" : "text-red-600") + " whitespace-nowrap font-black"}>{entry.entry_type === "income" ? "+" : "-"}¥{yen(Number(entry.amount ?? 0))}</div></div></div>)}{entries.length===0&&<div className="text-sm text-slate-500">今月のお金メモはまだありません。</div>}</div></Card></div>;
+
+  const incomeEntries = entries.filter((e) => e.entry_type === "income");
+  const expenseEntries = entries.filter((e) => e.entry_type === "expense");
+  const incomeTotal = incomeEntries.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+  const expenseTotal = expenseEntries.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+  const balance = incomeTotal - expenseTotal;
+
+  async function saveEntry(fd: FormData) {
+    try {
+      const uid = await userId();
+      await insert("money_entries", {
+        user_id: uid,
+        entry_date: String(fd.get("entry_date") || today),
+        entry_type: String(fd.get("entry_type") || "expense"),
+        category: String(fd.get("category") || "その他"),
+        title: String(fd.get("title") || ""),
+        amount: num(fd.get("amount")) ?? 0,
+        memo: String(fd.get("memo") || ""),
+        visibility: "private",
+      });
+      setMsg({ type: "ok", text: "お金メモを追加しました。下の収入・支出履歴に反映しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" });
+    }
+  }
+
+  async function saveMonthly(fd: FormData) {
+    try {
+      const uid = await userId();
+      await upsert("money_logs", {
+        user_id: uid,
+        month: String(fd.get("month") || month),
+        income: incomeTotal,
+        expense: expenseTotal,
+        investment: num(fd.get("investment")),
+        nisa_checked: fd.get("nisa_checked") === "on",
+        memo: String(fd.get("memo") || ""),
+        updated_at: new Date().toISOString(),
+      }, "user_id,month");
+      setMsg({ type: "ok", text: "NISA・月次確認を保存しました。確認状況に反映しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" });
+    }
+  }
+
+  async function deleteEntry(id: string) {
+    if (!confirm("このお金メモを削除しますか？")) return;
+    try {
+      const { error } = await supabase.from("money_entries").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setMsg({ type: "ok", text: "お金メモを削除しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "削除に失敗しました。" });
+    }
+  }
+
+  const EntryList = ({ title, items, type }: { title: string; items: any[]; type: "income" | "expense" }) => (
+    <Card>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <H2>{title}</H2>
+          <div className="mt-1 text-sm text-slate-500">{items.length}件</div>
+        </div>
+        <div className={(type === "income" ? "text-emerald-600" : "text-red-600") + " text-2xl font-black"}>
+          {type === "income" ? "+" : "-"}¥{yen(items.reduce((sum, e) => sum + Number(e.amount ?? 0), 0))}
+        </div>
+      </div>
+      <div className="mt-4 space-y-3">
+        {items.map((entry) => (
+          <div key={entry.id} className="rounded-2xl bg-slate-50 p-4 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-bold text-slate-900">{entry.title || entry.category || "無題"}</div>
+                <div className="text-slate-500">{entry.entry_date} / {entry.category || "その他"}</div>
+                {entry.memo ? <div className="mt-1 text-slate-600">{entry.memo}</div> : null}
+              </div>
+              <div className="text-right">
+                <div className={(type === "income" ? "text-emerald-600" : "text-red-600") + " whitespace-nowrap font-black"}>{type === "income" ? "+" : "-"}¥{yen(Number(entry.amount ?? 0))}</div>
+                <button type="button" onClick={() => deleteEntry(entry.id)} className="mt-2 text-xs font-semibold text-rose-600">削除</button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {items.length === 0 && <div className="text-sm text-slate-500">今月の{type === "income" ? "収入" : "支出"}メモはまだありません。</div>}
+      </div>
+    </Card>
+  );
+
+  return <div className="space-y-6">
+    <Message msg={msg}/>
+
+    <div className="grid gap-4 md:grid-cols-4">
+      <Card><div className="text-sm text-slate-500">今月の収入</div><div className="mt-2 text-3xl font-black text-emerald-600">¥{yen(incomeTotal)}</div></Card>
+      <Card><div className="text-sm text-slate-500">今月の支出</div><div className="mt-2 text-3xl font-black text-red-600">¥{yen(expenseTotal)}</div></Card>
+      <Card><div className="text-sm text-slate-500">差分</div><div className={(balance >= 0 ? "text-emerald-600" : "text-red-600") + " mt-2 text-3xl font-black"}>¥{yen(balance)}</div></Card>
+      <Card><div className="text-sm text-slate-500">NISA確認</div><div className={(monthlyLog?.nisa_checked ? "text-emerald-600" : "text-slate-400") + " mt-2 text-2xl font-black"}>{monthlyLog?.nisa_checked ? "確認済み" : "未確認"}</div></Card>
+    </div>
+
+    <Card>
+      <H2>NISA・月次確認状況</H2>
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">対象月</div><div className="mt-1 text-xl font-black">{monthlyLog?.month ?? month}</div></div>
+        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">投資額</div><div className="mt-1 text-xl font-black">¥{yen(Number(monthlyLog?.investment ?? 0))}</div></div>
+        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">収入/支出</div><div className="mt-1 text-lg font-black">¥{yen(incomeTotal)} / ¥{yen(expenseTotal)}</div></div>
+        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">月次メモ</div><div className="mt-1 font-semibold text-slate-800">{monthlyLog?.memo || "未入力"}</div></div>
+      </div>
+    </Card>
+
+    <Card>
+      <H2>お金メモ追加</H2>
+      <p className="mt-2 text-sm text-slate-500">使った額や収入を、その都度メモします。登録後は下の「収入履歴」「支出履歴」に分かれて表示されます。</p>
+      <form action={saveEntry} className="mt-5 grid gap-4 md:grid-cols-2">
+        <Input label="日付" name="entry_date" type="date" defaultValue={today}/>
+        <Select label="種別" name="entry_type"><option value="expense">支出</option><option value="income">収入</option></Select>
+        <Input label="カテゴリ" name="category" placeholder="食費 / 交通 / 美容 / 趣味など"/>
+        <Input label="金額" name="amount" type="number"/>
+        <Input label="タイトル" name="title" placeholder="例：昼食、制汗剤、交通費"/>
+        <Input label="メモ" name="memo"/>
+        <div className="md:col-span-2"><Btn>メモ追加</Btn></div>
+      </form>
+    </Card>
+
+    <Card>
+      <H2>NISA・月次確認を登録</H2>
+      <form action={saveMonthly} className="mt-5 grid gap-4 md:grid-cols-2">
+        <Input label="月" name="month" type="month" defaultValue={monthlyLog?.month ?? month}/>
+        <Input label="投資額" name="investment" type="number" defaultValue={monthlyLog?.investment}/>
+        <label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="nisa_checked" defaultChecked={!!monthlyLog?.nisa_checked}/>NISA確認済み</label>
+        <Input label="月次メモ" name="memo" defaultValue={monthlyLog?.memo}/>
+        <div className="md:col-span-2"><Btn>月次確認を保存</Btn></div>
+      </form>
+    </Card>
+
+    <div className="grid gap-6 lg:grid-cols-2">
+      <EntryList title="今月の収入履歴" items={incomeEntries} type="income" />
+      <EntryList title="今月の支出履歴" items={expenseEntries} type="expense" />
+    </div>
+  </div>;
 }
 
 const defaultRules = {
