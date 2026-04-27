@@ -485,13 +485,97 @@ export function WorkoutV5Section() {
 }
 
 export function OutputsV5Section() {
-  const [outputs,setOutputs]=useState<any[]>([]); const [reviews,setReviews]=useState<any[]>([]); const [msg,setMsg]=useState<Msg>(null); const today=todayISO();
-  async function load(){const uid=await userId(); const [{data:o},{data:r}]=await Promise.all([supabase.from("outputs").select("*").eq("user_id",uid).order("date",{ascending:false}),supabase.from("output_reviews").select("*").eq("user_id",uid)]); setOutputs(o??[]); setReviews(r??[]);}
-  useEffect(()=>{load().catch(e=>setMsg({type:"error",text:e.message}))},[]);
-  async function save(fd:FormData){try{const uid=await userId(); await insert("outputs",{user_id:uid,date:today,title:String(fd.get("title")),category:String(fd.get("category")),purpose:String(fd.get("purpose")||""),content_summary:String(fd.get("content_summary")||""),is_explainable:fd.get("is_explainable")==="on",status:String(fd.get("status")),memo:String(fd.get("memo")||"")}); setMsg({type:"ok",text:"成果物を保存しました。"}); await load();}catch(e){setMsg({type:"error",text:e instanceof Error?e.message:"保存に失敗しました。"})}}
-  async function review(fd:FormData, outputId:string){try{const uid=await userId(); await upsert("output_reviews",{user_id:uid,output_id:outputId,review_date:today,good_points:String(fd.get("good_points")||""),improvements:String(fd.get("improvements")||""),third_person_critique:String(fd.get("third_person_critique")||""),interview_evaluation:String(fd.get("interview_evaluation")||""),next_action:String(fd.get("next_action")||""),updated_at:new Date().toISOString()},"user_id,output_id"); setMsg({type:"ok",text:"AIレビューを保存しました。"}); await load();}catch(e){setMsg({type:"error",text:e instanceof Error?e.message:"保存に失敗しました。"})}}
-  const rmap=new Map(reviews.map(r=>[r.output_id,r]));
-  return <div className="space-y-6"><Message msg={msg}/><Card><H2>成果物を追加</H2><form action={save} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="タイトル" name="title"/><Select label="カテゴリ" name="category"><option>アプリ改善</option><option>技術整理</option><option>記事</option><option>その他</option></Select><Input label="目的" name="purpose"/><Select label="状態" name="status"><option>未着手</option><option>進行中</option><option>完了</option></Select><div className="md:col-span-2"><Textarea label="AIに見せる要約" name="content_summary"/></div><label className="flex items-center gap-3"><input type="checkbox" name="is_explainable"/>説明できる状態</label><Input label="メモ" name="memo"/><div className="md:col-span-2"><Btn>保存</Btn></div></form></Card>{outputs.map(o=>{const r=rmap.get(o.id); return <Card key={o.id}><div className="font-black">{o.title}</div><div className="mt-1 text-sm text-slate-500">{o.category} / {o.status} / 説明可能：{o.is_explainable?"Yes":"No"}</div><form action={(fd)=>review(fd,o.id)} className="mt-4 grid gap-3"><Textarea label="良い点" name="good_points" defaultValue={r?.good_points}/><Textarea label="改善点" name="improvements" defaultValue={r?.improvements}/><Textarea label="厳しい第三者ダメ出し" name="third_person_critique" defaultValue={r?.third_person_critique}/><Textarea label="面接官評価" name="interview_evaluation" defaultValue={r?.interview_evaluation}/><Textarea label="次の改善1つ" name="next_action" defaultValue={r?.next_action}/><Btn>AIレビュー保存</Btn></form></Card>})}</div>
+  const [outputs, setOutputs] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [editingOutput, setEditingOutput] = useState<any>(null);
+  const [msg, setMsg] = useState<Msg>(null);
+  const today = todayISO();
+
+  async function load() {
+    const uid = await userId();
+    const [{ data: o, error: outputError }, { data: r, error: reviewError }] = await Promise.all([
+      supabase.from("outputs").select("*").eq("user_id", uid).order("date", { ascending: false }).order("created_at", { ascending: false }),
+      supabase.from("output_reviews").select("*").eq("user_id", uid),
+    ]);
+    if (outputError) throw new Error(outputError.message);
+    if (reviewError) throw new Error(reviewError.message);
+    setOutputs(o ?? []);
+    setReviews(r ?? []);
+  }
+
+  useEffect(() => { load().catch(e => setMsg({ type: "error", text: e.message })); }, []);
+
+  async function save(fd: FormData) {
+    try {
+      const uid = await userId();
+      const title = String(fd.get("title") || "").trim();
+      if (!title) throw new Error("タイトルを入力してください。");
+      const payload = {
+        user_id: uid,
+        date: today,
+        title,
+        category: String(fd.get("category") || "アプリ改善"),
+        purpose: String(fd.get("purpose") || ""),
+        content_summary: String(fd.get("content_summary") || ""),
+        is_explainable: fd.get("is_explainable") === "on",
+        status: String(fd.get("status") || "未着手"),
+        memo: String(fd.get("memo") || ""),
+        updated_at: new Date().toISOString(),
+      };
+      if (editingOutput?.id) {
+        const { error } = await supabase.from("outputs").update(payload).eq("id", editingOutput.id).eq("user_id", uid);
+        if (error) throw new Error(error.message);
+        setMsg({ type: "ok", text: "成果物を更新しました。" });
+      } else {
+        const { error } = await supabase.from("outputs").insert(payload);
+        if (error) throw new Error(error.message);
+        setMsg({ type: "ok", text: "成果物を保存しました。下の成果物一覧に反映しました。" });
+      }
+      setEditingOutput(null);
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" });
+    }
+  }
+
+  async function deleteOutput(id: string) {
+    try {
+      const uid = await userId();
+      const { error } = await supabase.from("outputs").delete().eq("id", id).eq("user_id", uid);
+      if (error) throw new Error(error.message);
+      if (editingOutput?.id === id) setEditingOutput(null);
+      setMsg({ type: "ok", text: "成果物を削除しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "削除に失敗しました。" });
+    }
+  }
+
+  async function review(fd: FormData, outputId: string) {
+    try {
+      const uid = await userId();
+      await upsert("output_reviews", {
+        user_id: uid,
+        output_id: outputId,
+        review_date: today,
+        good_points: String(fd.get("good_points") || ""),
+        improvements: String(fd.get("improvements") || ""),
+        third_person_critique: String(fd.get("third_person_critique") || ""),
+        interview_evaluation: String(fd.get("interview_evaluation") || ""),
+        next_action: String(fd.get("next_action") || ""),
+        updated_at: new Date().toISOString(),
+      }, "user_id,output_id");
+      setMsg({ type: "ok", text: "AIレビューを保存しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" });
+    }
+  }
+
+  const rmap = new Map(reviews.map(r => [r.output_id, r]));
+  const formTitle = editingOutput ? "成果物を編集" : "成果物を追加";
+
+  return <div className="space-y-6"><Message msg={msg}/><Card><div className="flex flex-wrap items-center justify-between gap-3"><H2>{formTitle}</H2>{editingOutput && <button type="button" onClick={() => setEditingOutput(null)} className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">新規入力に戻る</button>}</div><form key={editingOutput?.id ?? "new-output"} action={save} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="タイトル" name="title" defaultValue={editingOutput?.title}/><Select label="カテゴリ" name="category" defaultValue={editingOutput?.category ?? "アプリ改善"}><option>アプリ改善</option><option>技術整理</option><option>記事</option><option>その他</option></Select><Input label="目的" name="purpose" defaultValue={editingOutput?.purpose}/><Select label="状態" name="status" defaultValue={editingOutput?.status ?? "未着手"}><option>未着手</option><option>進行中</option><option>完了</option></Select><div className="md:col-span-2"><Textarea label="AIに見せる要約" name="content_summary" defaultValue={editingOutput?.content_summary}/></div><label className="flex items-center gap-3"><input type="checkbox" name="is_explainable" defaultChecked={!!editingOutput?.is_explainable}/>説明できる状態</label><Input label="メモ" name="memo" defaultValue={editingOutput?.memo}/><div className="md:col-span-2"><Btn>{editingOutput ? "更新" : "保存"}</Btn></div></form></Card><Card><H2>成果物一覧</H2><div className="mt-3 text-sm text-slate-500">保存した成果物はここで確認・編集・削除できます。面接で話す材料として残します。</div><div className="mt-5 space-y-4">{outputs.length === 0 ? <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">まだ成果物はありません。</div> : outputs.map(o => { const r = rmap.get(o.id); return <div key={o.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-black text-slate-900">{o.title}</div><div className="mt-1 text-sm text-slate-500">{o.date} / {o.category} / {o.status} / 説明可能：{o.is_explainable ? "Yes" : "No"}</div>{o.purpose && <div className="mt-2 text-sm"><span className="font-bold">目的：</span>{o.purpose}</div>}{o.content_summary && <div className="mt-2 whitespace-pre-wrap rounded-2xl bg-slate-50 p-3 text-sm"><span className="font-bold">AIに見せる要約：</span><br />{o.content_summary}</div>}{o.memo && <div className="mt-2 text-sm text-slate-600">メモ：{o.memo}</div>}</div><div className="flex shrink-0 gap-2"><button type="button" onClick={() => { setEditingOutput(o); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="rounded-2xl bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-700">編集</button><button type="button" onClick={() => deleteOutput(o.id)} className="rounded-2xl bg-red-50 px-4 py-2 text-sm font-semibold text-red-600">削除</button></div></div><details className="mt-4 rounded-2xl bg-slate-50 p-4"><summary className="cursor-pointer text-sm font-bold text-slate-700">AIレビュー / 面接用メモ</summary><form action={(fd) => review(fd, o.id)} className="mt-4 grid gap-3"><Textarea label="良い点" name="good_points" defaultValue={r?.good_points}/><Textarea label="改善点" name="improvements" defaultValue={r?.improvements}/><Textarea label="厳しい第三者ダメ出し" name="third_person_critique" defaultValue={r?.third_person_critique}/><Textarea label="面接官評価" name="interview_evaluation" defaultValue={r?.interview_evaluation}/><Textarea label="次の改善1つ" name="next_action" defaultValue={r?.next_action}/><Btn>AIレビュー保存</Btn></form></details></div>})}</div></Card></div>;
 }
 
 export function WeeklyReviewV5Section() {
