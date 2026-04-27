@@ -115,27 +115,72 @@ async function insert(table: string, payload: any) {
 export function HealthV5Section() {
   const [log, setLog] = useState<any>(null);
   const [weekLogs, setWeekLogs] = useState<any[]>([]);
+  const [historyLogs, setHistoryLogs] = useState<any[]>([]);
+  const [editingLog, setEditingLog] = useState<any>(null);
   const [summary, setSummary] = useState({ avgWeight: null as number | null, avgBodyFat: null as number | null, sleepRate: 0, waterRate: 0 });
   const [msg, setMsg] = useState<Msg>(null);
   const today = todayISO();
+
   async function load() {
     const uid = await userId();
     const weekStart = weekStartISO();
-    const [{ data: todayLog }, { data: weekLogsData }] = await Promise.all([
+    const [{ data: todayLog }, { data: weekLogsData }, { data: historyData }] = await Promise.all([
       supabase.from("health_logs").select("*").eq("user_id", uid).eq("date", today).maybeSingle(),
       supabase.from("health_logs").select("*").eq("user_id", uid).gte("date", weekStart).lte("date", today).order("date", { ascending: true }),
+      supabase.from("health_logs").select("*").eq("user_id", uid).order("date", { ascending: false }).limit(30),
     ]);
     setLog(todayLog);
     const logs = weekLogsData ?? [];
     setWeekLogs(logs);
+    setHistoryLogs(historyData ?? []);
     const avg = (arr: any[]) => { const valid = arr.filter((v) => v !== null && v !== undefined && !Number.isNaN(Number(v))).map(Number); return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null; };
     setSummary({ avgWeight: avg(logs.map((l) => l.weight)), avgBodyFat: avg(logs.map((l) => l.body_fat)), waterRate: logs.length ? Math.round((logs.filter((l) => (l.water_ml ?? 0) >= 2000).length / logs.length) * 100) : 0, sleepRate: logs.length ? Math.round((logs.filter((l) => (l.sleep_hours ?? 0) >= 7).length / logs.length) * 100) : 0 });
   }
+
   useEffect(() => { load().catch((e) => setMsg({ type: "error", text: e.message })); }, []);
-  async function save(formData: FormData) { try { const uid = await userId(); await upsert("health_logs", { user_id: uid, date: today, weight: num(formData.get("weight")), body_fat: num(formData.get("body_fat")), water_ml: num(formData.get("water_ml")), sleep_hours: num(formData.get("sleep_hours")), no_phone_before_bed: formData.get("no_phone_before_bed") === "on", bowel_movement: formData.get("bowel_movement") === "on", condition_memo: String(formData.get("condition_memo") || ""), updated_at: new Date().toISOString() }, "user_id,date"); setMsg({ type: "ok", text: "健康ログを保存しました。" }); await load(); } catch (e) { setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" }); } }
+
+  async function save(formData: FormData) {
+    try {
+      const uid = await userId();
+      await upsert("health_logs", { user_id: uid, date: today, weight: num(formData.get("weight")), body_fat: num(formData.get("body_fat")), water_ml: num(formData.get("water_ml")), sleep_hours: num(formData.get("sleep_hours")), no_phone_before_bed: formData.get("no_phone_before_bed") === "on", bowel_movement: formData.get("bowel_movement") === "on", condition_memo: String(formData.get("condition_memo") || ""), updated_at: new Date().toISOString() }, "user_id,date");
+      setMsg({ type: "ok", text: "健康ログを保存しました。" });
+      await load();
+    } catch (e) { setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" }); }
+  }
+
+  async function updateHistory(formData: FormData) {
+    if (!editingLog) return;
+    try {
+      const uid = await userId();
+      const nextDate = String(formData.get("edit_date") || editingLog.date);
+      const payload = { user_id: uid, date: nextDate, weight: num(formData.get("edit_weight")), body_fat: num(formData.get("edit_body_fat")), water_ml: num(formData.get("edit_water_ml")), sleep_hours: num(formData.get("edit_sleep_hours")), no_phone_before_bed: formData.get("edit_no_phone_before_bed") === "on", bowel_movement: formData.get("edit_bowel_movement") === "on", condition_memo: String(formData.get("edit_condition_memo") || ""), updated_at: new Date().toISOString() };
+      if (nextDate !== editingLog.date) {
+        const { error: deleteError } = await supabase.from("health_logs").delete().eq("user_id", uid).eq("date", editingLog.date);
+        if (deleteError) throw new Error(deleteError.message);
+      }
+      await upsert("health_logs", payload, "user_id,date");
+      setEditingLog(null);
+      setMsg({ type: "ok", text: "健康ログを更新しました。" });
+      await load();
+    } catch (e) { setMsg({ type: "error", text: e instanceof Error ? e.message : "更新に失敗しました。" }); }
+  }
+
+  async function deleteHistory(target: any) {
+    if (!window.confirm(`${target.date} の健康ログを削除しますか？`)) return;
+    try {
+      const uid = await userId();
+      const { error } = await supabase.from("health_logs").delete().eq("user_id", uid).eq("date", target.date);
+      if (error) throw new Error(error.message);
+      if (editingLog?.date === target.date) setEditingLog(null);
+      setMsg({ type: "ok", text: "健康ログを削除しました。" });
+      await load();
+    } catch (e) { setMsg({ type: "error", text: e instanceof Error ? e.message : "削除に失敗しました。" }); }
+  }
+
   const weightPoints = weekLogs.map((l) => ({ date: l.date, value: l.weight == null ? null : Number(l.weight) }));
   const bodyFatPoints = weekLogs.map((l) => ({ date: l.date, value: l.body_fat == null ? null : Number(l.body_fat) }));
-  return <div className="space-y-6"><Message msg={msg} /><div className="grid gap-4 md:grid-cols-4"><Card><div className="text-sm text-slate-500">週平均体重</div><div className="mt-2 text-2xl font-black">{summary.avgWeight?.toFixed(1) ?? "-"}kg</div></Card><Card><div className="text-sm text-slate-500">週平均体脂肪</div><div className="mt-2 text-2xl font-black">{summary.avgBodyFat?.toFixed(1) ?? "-"}%</div></Card><Card><div className="text-sm text-slate-500">水分達成率</div><div className="mt-2 text-2xl font-black">{summary.waterRate}%</div></Card><Card><div className="text-sm text-slate-500">睡眠達成率</div><div className="mt-2 text-2xl font-black">{summary.sleepRate}%</div></Card></div><div className="grid gap-4 xl:grid-cols-2"><MiniLineChart title="体重推移" unit="kg" points={weightPoints} /><MiniLineChart title="体脂肪推移" unit="%" points={bodyFatPoints} /></div><Card><H2>今日の健康入力</H2><form action={save} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="体重" name="weight" type="number" defaultValue={log?.weight} placeholder="kg" /><Input label="体脂肪" name="body_fat" type="number" defaultValue={log?.body_fat} placeholder="%" /><Input label="水分摂取量" name="water_ml" type="number" defaultValue={log?.water_ml} placeholder="ml" /><Input label="睡眠時間" name="sleep_hours" type="number" defaultValue={log?.sleep_hours} placeholder="時間" /><label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="bowel_movement" defaultChecked={!!log?.bowel_movement} />便通あり</label><label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="no_phone_before_bed" defaultChecked={!!log?.no_phone_before_bed} />寝る30分前スマホ禁止</label><div className="md:col-span-2"><Textarea label="体調メモ" name="condition_memo" defaultValue={log?.condition_memo} /></div><div className="md:col-span-2"><Btn>保存</Btn></div></form></Card></div>;
+
+  return <div className="space-y-6"><Message msg={msg} /><div className="grid gap-4 md:grid-cols-4"><Card><div className="text-sm text-slate-500">週平均体重</div><div className="mt-2 text-2xl font-black">{summary.avgWeight?.toFixed(1) ?? "-"}kg</div></Card><Card><div className="text-sm text-slate-500">週平均体脂肪</div><div className="mt-2 text-2xl font-black">{summary.avgBodyFat?.toFixed(1) ?? "-"}%</div></Card><Card><div className="text-sm text-slate-500">水分達成率</div><div className="mt-2 text-2xl font-black">{summary.waterRate}%</div></Card><Card><div className="text-sm text-slate-500">睡眠達成率</div><div className="mt-2 text-2xl font-black">{summary.sleepRate}%</div></Card></div><div className="grid gap-4 xl:grid-cols-2"><MiniLineChart title="体重推移" unit="kg" points={weightPoints} /><MiniLineChart title="体脂肪推移" unit="%" points={bodyFatPoints} /></div><Card><H2>今日の健康入力</H2><form action={save} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="体重" name="weight" type="number" defaultValue={log?.weight} placeholder="kg" /><Input label="体脂肪" name="body_fat" type="number" defaultValue={log?.body_fat} placeholder="%" /><Input label="水分摂取量" name="water_ml" type="number" defaultValue={log?.water_ml} placeholder="ml" /><Input label="睡眠時間" name="sleep_hours" type="number" defaultValue={log?.sleep_hours} placeholder="時間" /><label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="bowel_movement" defaultChecked={!!log?.bowel_movement} />便通あり</label><label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="no_phone_before_bed" defaultChecked={!!log?.no_phone_before_bed} />寝る30分前スマホ禁止</label><div className="md:col-span-2"><Textarea label="体調メモ" name="condition_memo" defaultValue={log?.condition_memo} /></div><div className="md:col-span-2"><Btn>保存</Btn></div></form></Card><Card><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><H2>健康ログ履歴</H2><p className="mt-2 text-sm text-slate-500">直近30件の記録を確認・編集・削除できます。</p></div>{editingLog && <button type="button" onClick={() => setEditingLog(null)} className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">今日の入力に戻る</button>}</div>{editingLog && <form key={editingLog.date} action={updateHistory} className="mt-5 grid gap-4 rounded-3xl border border-sky-100 bg-sky-50 p-4 md:grid-cols-2"><Input label="日付" name="edit_date" type="date" defaultValue={editingLog.date} /><Input label="体重" name="edit_weight" type="number" defaultValue={editingLog.weight} placeholder="kg" /><Input label="体脂肪" name="edit_body_fat" type="number" defaultValue={editingLog.body_fat} placeholder="%" /><Input label="水分摂取量" name="edit_water_ml" type="number" defaultValue={editingLog.water_ml} placeholder="ml" /><Input label="睡眠時間" name="edit_sleep_hours" type="number" defaultValue={editingLog.sleep_hours} placeholder="時間" /><label className="flex items-center gap-3 rounded-2xl bg-white p-4"><input type="checkbox" name="edit_bowel_movement" defaultChecked={!!editingLog.bowel_movement} />便通あり</label><label className="flex items-center gap-3 rounded-2xl bg-white p-4"><input type="checkbox" name="edit_no_phone_before_bed" defaultChecked={!!editingLog.no_phone_before_bed} />寝る30分前スマホ禁止</label><div className="md:col-span-2"><Textarea label="体調メモ" name="edit_condition_memo" defaultValue={editingLog.condition_memo} /></div><div className="flex gap-3 md:col-span-2"><Btn>更新</Btn><button type="button" onClick={() => setEditingLog(null)} className="rounded-2xl border border-slate-200 px-5 py-3 font-semibold text-slate-700 hover:bg-white">キャンセル</button></div></form>}{historyLogs.length === 0 ? <p className="mt-5 text-sm text-slate-500">健康ログはまだありません。</p> : <div className="mt-5 space-y-3">{historyLogs.map((h) => <div key={h.date} className="rounded-3xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><div className="text-base font-black text-slate-900">{h.date}</div><div className="mt-2 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4"><span>体重：{h.weight ?? "-"}kg</span><span>体脂肪：{h.body_fat ?? "-"}%</span><span>水分：{h.water_ml ?? "-"}ml</span><span>睡眠：{h.sleep_hours ?? "-"}h</span><span>便通：{h.bowel_movement ? "あり" : "なし"}</span><span>スマホ禁止：{h.no_phone_before_bed ? "達成" : "未達成"}</span></div>{h.condition_memo && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{h.condition_memo}</p>}</div><div className="flex shrink-0 gap-2"><button type="button" onClick={() => setEditingLog(h)} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">編集</button><button type="button" onClick={() => deleteHistory(h)} className="rounded-2xl bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100">削除</button></div></div></div>)}</div>}</Card></div>;
 }
 
 export function RoutineV5Section() {
