@@ -90,8 +90,8 @@ const TAB_ACCENTS: Record<
   settings: {
     gradient: "from-slate-100 via-blue-50 to-indigo-100",
     badge: "Life OS Ver.5",
-    title: "設定",
-    subtitle: "目標・食事・AIテンプレ",
+    title: "ルール",
+    subtitle: "毎日見る行動固定表",
   },
   holo: {
     gradient: "from-cyan-100 via-sky-100 to-fuchsia-100",

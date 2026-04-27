@@ -25,7 +25,7 @@ export const DASHBOARD_TABS: Array<{ key: MainTab; label: string; description: s
   { key: "household", label: "家事", description: "曜日固定の家事チェック" },
   { key: "health", label: "健康", description: "体重・体脂肪・水分・睡眠" },
   { key: "money", label: "お金", description: "都度のお金メモとNISA確認" },
-  { key: "settings", label: "設定", description: "目標・食事・AIテンプレ" },
+  { key: "settings", label: "ルール", description: "毎日見る行動固定表" },
   { key: "holo", label: "ホロ活", description: "現状維持の独立スペース" },
 ];
 

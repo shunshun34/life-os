@@ -368,12 +368,76 @@ export function MoneyV5Section() {
   return <div className="space-y-6"><Message msg={msg}/><div className="grid gap-4 md:grid-cols-3"><Card><div className="text-sm text-slate-500">今月の収入</div><div className="mt-2 text-3xl font-black">¥{yen(incomeTotal)}</div></Card><Card><div className="text-sm text-slate-500">今月の支出</div><div className="mt-2 text-3xl font-black">¥{yen(expenseTotal)}</div></Card><Card><div className="text-sm text-slate-500">差分</div><div className={(balance >= 0 ? "text-emerald-600" : "text-red-600") + " mt-2 text-3xl font-black"}>¥{yen(balance)}</div></Card></div><Card><H2>お金メモ追加</H2><p className="mt-2 text-sm text-slate-500">使った額や収入を、その都度メモします。</p><form action={saveEntry} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="日付" name="entry_date" type="date" defaultValue={today}/><Select label="種別" name="entry_type"><option value="expense">支出</option><option value="income">収入</option></Select><Input label="カテゴリ" name="category" placeholder="食費 / 交通 / 美容 / 趣味など"/><Input label="金額" name="amount" type="number"/><Input label="タイトル" name="title" placeholder="例：昼食、制汗剤、交通費"/><Input label="メモ" name="memo"/><div className="md:col-span-2"><Btn>メモ追加</Btn></div></form></Card><Card><H2>NISA・月次確認</H2><form action={saveMonthly} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="月" name="month" type="month" defaultValue={monthlyLog?.month??month}/><Input label="投資額" name="investment" type="number" defaultValue={monthlyLog?.investment}/><label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="nisa_checked" defaultChecked={!!monthlyLog?.nisa_checked}/>NISA確認済み</label><Input label="月次メモ" name="memo" defaultValue={monthlyLog?.memo}/><div className="md:col-span-2"><Btn>月次確認を保存</Btn></div></form></Card><Card><H2>今月のメモ履歴</H2><div className="mt-4 space-y-3">{entries.map((entry)=><div key={entry.id} className="rounded-2xl bg-slate-50 p-4 text-sm"><div className="flex items-start justify-between gap-3"><div><div className="font-bold text-slate-900">{entry.title || entry.category}</div><div className="text-slate-500">{entry.entry_date} / {entry.category} / {entry.entry_type === "income" ? "収入" : "支出"}</div>{entry.memo ? <div className="mt-1 text-slate-600">{entry.memo}</div> : null}</div><div className={(entry.entry_type === "income" ? "text-emerald-600" : "text-red-600") + " whitespace-nowrap font-black"}>{entry.entry_type === "income" ? "+" : "-"}¥{yen(Number(entry.amount ?? 0))}</div></div></div>)}{entries.length===0&&<div className="text-sm text-slate-500">今月のお金メモはまだありません。</div>}</div></Card></div>;
 }
 
+const defaultRules = {
+  wake_up_time: "06:55",
+  sleep_time: "00:00",
+  sleep_rule: "23:30以降は作業しない（強制終了）",
+  breakfast_rule: "ご飯200〜250g＋納豆＋味噌汁＋卵＋プロテイン",
+  lunch_rule: "おにぎり2個＋タンパク質（チキン or ツナ等）",
+  dinner_rule: "ご飯最大300g＋タンパク質中心・腹8分",
+  diet_control_rule: "揚げ物・高脂質は週2まで、連続は禁止",
+  water_rule: "2000ml",
+  commute_rule: "英語 or AWS（インプット）",
+  lunch_break_rule: "復習（軽め）",
+  extra_rules: [] as string[],
+};
+
+function RulesCard({ icon, title, children, accent = false }: { icon: string; title: string; children: React.ReactNode; accent?: boolean }) {
+  return <Card className={accent ? "border-sky-200 bg-sky-50" : ""}><div className="mb-4 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-xl shadow-sm">{icon}</span><H2>{title}</H2></div><div className="space-y-4 text-base leading-8 text-slate-800 md:text-lg">{children}</div></Card>;
+}
+
 export function SettingsV5Section() {
-  const [settings,setSettings]=useState<any>(null); const [msg,setMsg]=useState<Msg>(null);
-  async function load(){const uid=await userId(); const {data}=await supabase.from("user_settings").select("*").eq("user_id",uid).maybeSingle(); setSettings(data)}
-  useEffect(()=>{load().catch(e=>setMsg({type:"error",text:e.message}))},[]);
-  async function save(fd:FormData){try{const uid=await userId(); await upsert("user_settings",{user_id:uid,wake_time:String(fd.get("wake_time")||""),sleep_target_time:String(fd.get("sleep_target_time")||""),breakfast_rule:String(fd.get("breakfast_rule")||""),lunch_rule:String(fd.get("lunch_rule")||""),dinner_rule:String(fd.get("dinner_rule")||""),water_target_ml:num(fd.get("water_target_ml"))??2000,ai_review_template:String(fd.get("ai_review_template")||""),updated_at:new Date().toISOString()},"user_id"); setMsg({type:"ok",text:"設定を保存しました。"}); await load();}catch(e){setMsg({type:"error",text:e instanceof Error?e.message:"保存に失敗しました。"})}}
-  return <div className="space-y-6"><Message msg={msg}/><Card><H2>基本設定</H2><form action={save} className="mt-5 grid gap-4 md:grid-cols-2"><Input label="起床時間" name="wake_time" type="time" defaultValue={settings?.wake_time}/><Input label="就寝目標時間" name="sleep_target_time" type="time" defaultValue={settings?.sleep_target_time}/><Input label="朝食内容" name="breakfast_rule" defaultValue={settings?.breakfast_rule}/><Input label="昼食ルール" name="lunch_rule" defaultValue={settings?.lunch_rule}/><Input label="夕食ルール" name="dinner_rule" defaultValue={settings?.dinner_rule}/><Input label="水分目標 ml" name="water_target_ml" type="number" defaultValue={settings?.water_target_ml??2000}/><div className="md:col-span-2"><Textarea label="AIレビュー固定文" name="ai_review_template" rows={8} defaultValue={settings?.ai_review_template ?? `この内容を評価してください。\n\n① 良い点\n② 改善点\n③ 厳しい第三者としてダメ出し\n④ 面接官なら採用するか（理由）`}/></div><div className="md:col-span-2"><Btn>保存</Btn></div></form></Card></div>
+  const [rules, setRules] = useState<any>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [msg, setMsg] = useState<Msg>(null);
+
+  async function load() {
+    const uid = await userId();
+    const { data, error } = await supabase.from("user_rules").select("*").eq("user_id", uid).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) { setRules(data); return; }
+    const { data: inserted, error: insertError } = await supabase.from("user_rules").insert({ user_id: uid, ...defaultRules }).select("*").single();
+    if (insertError) throw new Error(insertError.message);
+    setRules(inserted);
+  }
+
+  useEffect(() => { load().catch(e => setMsg({ type: "error", text: e.message })); }, []);
+
+  async function save(fd: FormData) {
+    try {
+      const uid = await userId();
+      const extraRules = String(fd.get("extra_rules") || "").split("\n").map((rule) => rule.trim()).filter(Boolean);
+      await upsert("user_rules", {
+        user_id: uid,
+        wake_up_time: String(fd.get("wake_up_time") || defaultRules.wake_up_time),
+        sleep_time: String(fd.get("sleep_time") || defaultRules.sleep_time),
+        sleep_rule: String(fd.get("sleep_rule") || defaultRules.sleep_rule),
+        breakfast_rule: String(fd.get("breakfast_rule") || defaultRules.breakfast_rule),
+        lunch_rule: String(fd.get("lunch_rule") || defaultRules.lunch_rule),
+        dinner_rule: String(fd.get("dinner_rule") || defaultRules.dinner_rule),
+        diet_control_rule: String(fd.get("diet_control_rule") || defaultRules.diet_control_rule),
+        water_rule: String(fd.get("water_rule") || defaultRules.water_rule),
+        commute_rule: String(fd.get("commute_rule") || defaultRules.commute_rule),
+        lunch_break_rule: String(fd.get("lunch_break_rule") || defaultRules.lunch_break_rule),
+        extra_rules: extraRules,
+        updated_at: new Date().toISOString(),
+      }, "user_id");
+      setMsg({ type: "ok", text: "ルールを保存しました。" });
+      setEditMode(false);
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" });
+    }
+  }
+
+  const r = rules ?? defaultRules;
+
+  if (editMode) {
+    return <div className="space-y-6"><Message msg={msg}/><Card><div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold text-sky-700">Life OS Ver.5</div><h2 className="mt-1 text-4xl font-black text-slate-950">ルール編集</h2><p className="mt-2 text-sm text-slate-500">月1回だけ見直す場所。普段は表示モードで確認します。</p></div><button type="button" onClick={() => setEditMode(false)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold shadow-sm">キャンセル</button></div><form action={save} className="mt-6 grid gap-4 md:grid-cols-2"><Input label="起床時間" name="wake_up_time" type="time" defaultValue={r.wake_up_time}/><Input label="就寝時間" name="sleep_time" type="time" defaultValue={r.sleep_time}/><div className="md:col-span-2"><Textarea label="睡眠ルール" name="sleep_rule" rows={2} defaultValue={r.sleep_rule}/></div><Textarea label="朝食内容" name="breakfast_rule" rows={3} defaultValue={r.breakfast_rule}/><Textarea label="昼食ルール" name="lunch_rule" rows={3} defaultValue={r.lunch_rule}/><Textarea label="夕食ルール" name="dinner_rule" rows={3} defaultValue={r.dinner_rule}/><Textarea label="食事制御ルール" name="diet_control_rule" rows={3} defaultValue={r.diet_control_rule}/><Input label="水分目標" name="water_rule" defaultValue={r.water_rule}/><Textarea label="通勤ルール" name="commute_rule" rows={2} defaultValue={r.commute_rule}/><Textarea label="昼休みルール" name="lunch_break_rule" rows={2} defaultValue={r.lunch_break_rule}/><div className="md:col-span-2"><Textarea label="任意ルール（1行に1つ）" name="extra_rules" rows={5} defaultValue={(r.extra_rules ?? []).join("\n")} placeholder={"例：週平均体重で調整\n筋トレ優先\n夜は軽め"}/></div><div className="flex flex-col gap-3 md:col-span-2 md:flex-row"><button type="button" onClick={() => setEditMode(false)} className="flex-1 rounded-2xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-700">キャンセル</button><button className="flex-1 rounded-2xl bg-sky-600 px-5 py-3 font-bold text-white shadow-sm">保存</button></div></form></Card></div>;
+  }
+
+  return <div className="space-y-6"><Message msg={msg}/><div className="flex items-start justify-between gap-4"><div><div className="text-sm font-semibold text-sky-700">Life OS Ver.5</div><h2 className="mt-1 text-4xl font-black text-slate-950">ルール</h2><p className="mt-2 text-sm text-slate-500">覚えるためではなく、毎日見て迷わず動くための画面。</p></div><button type="button" onClick={() => setEditMode(true)} className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold shadow-sm">✏️ 編集</button></div><RulesCard icon="🕒" title="最重要ルール" accent><p>起床：<strong>{r.wake_up_time}</strong></p><p>就寝：<strong>{r.sleep_time}</strong></p><p>{r.sleep_rule}</p></RulesCard><RulesCard icon="🍚" title="食事ルール"><div><p className="font-bold text-slate-950">朝</p><p>{r.breakfast_rule}</p></div><div><p className="font-bold text-slate-950">昼</p><p>{r.lunch_rule}</p></div><div><p className="font-bold text-slate-950">夜</p><p>{r.dinner_rule}</p></div><div><p className="font-bold text-slate-950">制御ルール</p><p>{r.diet_control_rule}</p></div></RulesCard><RulesCard icon="💧" title="水分・健康"><p>水分：<strong>{r.water_rule}</strong></p><p>不足時は夜で調整</p></RulesCard><RulesCard icon="🚃" title="スキマ時間活用"><p>通勤：{r.commute_rule}</p><p>昼：{r.lunch_break_rule}</p></RulesCard><RulesCard icon="🧩" title="任意ルール">{Array.isArray(r.extra_rules) && r.extra_rules.length > 0 ? <ul className="list-disc space-y-1 pl-5">{r.extra_rules.map((rule: string, index: number) => <li key={`${rule}-${index}`}>{rule}</li>)}</ul> : <p className="text-slate-500">任意ルールはまだありません。</p>}</RulesCard><button type="button" onClick={() => setConfirmed(true)} className="w-full rounded-2xl bg-slate-900 p-4 text-lg font-bold text-white shadow-sm">今日守る</button>{confirmed ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">今日のルール確認OK。あとはダッシュボード通りに動けば大丈夫です。</div> : null}</div>;
 }
 
 export function RecoveryV5Section() {
@@ -422,5 +486,5 @@ export function DashboardV5Section({ onGo }: { onGo: (key: any) => void }) {
   useEffect(()=>{load().catch(e=>setMsg({type:"error",text:e.message}))},[]);
   const weeklyPlan:Record<number,string[]>= {0:["全身トレ","有酸素","週次レビュー","AIレビュー"],1:["宅トレ30分","有酸素15分","体重測定"],2:["ジムA","有酸素15分","勉強"],3:["休み","ストレッチ5分","軽振り返り"],4:["ジムB","有酸素15分","勉強"],5:["有酸素15〜20分","ストレッチ","軽評価"],6:["上半身トレ","有酸素","成果物タイム"]};
   if(!data) return <Card><Message msg={msg}/><div className="text-slate-500">ダッシュボードを読み込み中...</div></Card>;
-  return <div className="space-y-6"><Message msg={msg}/><Card><div className="text-sm font-semibold text-sky-700">{today}（{dayLabels[dow]}）</div><h2 className="mt-2 text-3xl font-black">今日の司令塔</h2><div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>onGo("settings")} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold">設定</button><button onClick={()=>onGo("health")} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white">今日の入力</button></div></Card><Card><H2>今日の予定</H2><div className="mt-4 grid gap-2 md:grid-cols-4">{weeklyPlan[dow].map(x=><div key={x} className="rounded-2xl bg-slate-50 p-3 text-sm font-semibold">{x}</div>)}</div></Card><Card><H2>今日のチェックリスト</H2><div className="mt-5 space-y-5">{data.checklist.map((s:any)=><div key={s.section}><h3 className="mb-2 text-sm font-bold text-slate-600">{s.section}</h3><div className="space-y-2">{s.items.map((i:any,idx:number)=><button key={idx} onClick={()=>onGo(i.tab)} className="flex w-full items-center justify-between rounded-2xl border border-slate-200 p-3 text-left"><span>{i.label}</span><span className={`rounded-full px-3 py-1 text-xs ${i.done?"bg-emerald-100 text-emerald-700":"bg-slate-100 text-slate-600"}`}>{i.done?"完了":"未"}</span></button>)}</div></div>)}</div></Card><div className="grid gap-4 md:grid-cols-5"><Card><div className="text-xs text-slate-500">平均体重</div><div className="text-2xl font-black">{data.kpi.avgWeight?.toFixed(1)??"-"}kg</div></Card><Card><div className="text-xs text-slate-500">平均体脂肪</div><div className="text-2xl font-black">{data.kpi.avgBodyFat?.toFixed(1)??"-"}%</div></Card><Card><div className="text-xs text-slate-500">勉強</div><div className="text-2xl font-black">{data.kpi.study}分</div></Card><Card><div className="text-xs text-slate-500">筋トレ</div><div className="text-2xl font-black">{data.kpi.workout}回</div></Card><Card><div className="text-xs text-slate-500">成果物</div><div className="text-2xl font-black">{data.kpi.outputs}個</div></Card></div>{data.alerts.length>0&&<Card><H2>記録漏れアラート</H2><div className="mt-4 space-y-2">{data.alerts.map((a:any)=><button key={a[0]} onClick={()=>onGo(a[1])} className="block w-full rounded-2xl bg-yellow-50 p-3 text-left text-sm font-semibold text-yellow-800">{a[0]}</button>)}</div></Card>}{dow===0&&<Card className="border-blue-200 bg-blue-50"><H2>日曜レビュー</H2><div className="mt-3 text-sm">週次レビュー：{data.weekly?"完了":"未完了"} / AIレビュー：{data.aiDone?"完了":"未実施"}</div><button onClick={()=>onGo("weeklyReview")} className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 font-semibold text-white">週次レビューへ</button></Card>}</div>
+  return <div className="space-y-6"><Message msg={msg}/><Card><div className="text-sm font-semibold text-sky-700">{today}（{dayLabels[dow]}）</div><h2 className="mt-2 text-3xl font-black">今日の司令塔</h2><div className="mt-4 flex flex-wrap gap-2"><button onClick={()=>onGo("settings")} className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold">ルール</button><button onClick={()=>onGo("health")} className="rounded-full bg-sky-600 px-4 py-2 text-sm font-semibold text-white">今日の入力</button></div></Card><Card><H2>今日の予定</H2><div className="mt-4 grid gap-2 md:grid-cols-4">{weeklyPlan[dow].map(x=><div key={x} className="rounded-2xl bg-slate-50 p-3 text-sm font-semibold">{x}</div>)}</div></Card><Card><H2>今日のチェックリスト</H2><div className="mt-5 space-y-5">{data.checklist.map((s:any)=><div key={s.section}><h3 className="mb-2 text-sm font-bold text-slate-600">{s.section}</h3><div className="space-y-2">{s.items.map((i:any,idx:number)=><button key={idx} onClick={()=>onGo(i.tab)} className="flex w-full items-center justify-between rounded-2xl border border-slate-200 p-3 text-left"><span>{i.label}</span><span className={`rounded-full px-3 py-1 text-xs ${i.done?"bg-emerald-100 text-emerald-700":"bg-slate-100 text-slate-600"}`}>{i.done?"完了":"未"}</span></button>)}</div></div>)}</div></Card><div className="grid gap-4 md:grid-cols-5"><Card><div className="text-xs text-slate-500">平均体重</div><div className="text-2xl font-black">{data.kpi.avgWeight?.toFixed(1)??"-"}kg</div></Card><Card><div className="text-xs text-slate-500">平均体脂肪</div><div className="text-2xl font-black">{data.kpi.avgBodyFat?.toFixed(1)??"-"}%</div></Card><Card><div className="text-xs text-slate-500">勉強</div><div className="text-2xl font-black">{data.kpi.study}分</div></Card><Card><div className="text-xs text-slate-500">筋トレ</div><div className="text-2xl font-black">{data.kpi.workout}回</div></Card><Card><div className="text-xs text-slate-500">成果物</div><div className="text-2xl font-black">{data.kpi.outputs}個</div></Card></div>{data.alerts.length>0&&<Card><H2>記録漏れアラート</H2><div className="mt-4 space-y-2">{data.alerts.map((a:any)=><button key={a[0]} onClick={()=>onGo(a[1])} className="block w-full rounded-2xl bg-yellow-50 p-3 text-left text-sm font-semibold text-yellow-800">{a[0]}</button>)}</div></Card>}{dow===0&&<Card className="border-blue-200 bg-blue-50"><H2>日曜レビュー</H2><div className="mt-3 text-sm">週次レビュー：{data.weekly?"完了":"未完了"} / AIレビュー：{data.aiDone?"完了":"未実施"}</div><button onClick={()=>onGo("weeklyReview")} className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 font-semibold text-white">週次レビューへ</button></Card>}</div>
 }
