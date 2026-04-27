@@ -369,7 +369,7 @@ export function MoneyV5Section() {
   async function load() {
     const uid = await userId();
     const monthStart = month + "-01";
-    const monthEnd = month + "-31";
+    const monthEnd = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).toISOString().slice(0, 10);
     const [{ data: monthly, error: monthlyError }, { data: monthEntries, error: entriesError }] = await Promise.all([
       supabase.from("money_logs").select("*").eq("user_id", uid).eq("month", month).maybeSingle(),
       supabase.from("money_entries").select("*").eq("user_id", uid).gte("entry_date", monthStart).lte("entry_date", monthEnd).order("entry_date", { ascending: false }).order("created_at", { ascending: false }),
