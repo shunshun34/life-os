@@ -300,12 +300,116 @@ export function CleanlinessV5Section() {
 }
 
 export function HouseholdV5Section() {
-  const [templates,setTemplates]=useState<any[]>([]); const [logs,setLogs]=useState<any[]>([]); const [msg,setMsg]=useState<Msg>(null); const today=todayISO();
-  async function load(){const uid=await userId(); const dow=dayOfWeek(); const [{data:t},{data:l}]=await Promise.all([supabase.from("household_templates").select("*").eq("user_id",uid).eq("is_active",true).eq("day_of_week",dow).order("display_order"), supabase.from("household_logs").select("*").eq("user_id",uid).eq("date",today)]); setTemplates(t??[]); setLogs(l??[]);}
-  useEffect(()=>{load().catch(e=>setMsg({type:"error",text:e.message}))},[]);
-  async function add(fd:FormData){try{const uid=await userId(); await insert("household_templates",{user_id:uid,task_name:String(fd.get("task_name")),day_of_week:Number(fd.get("day_of_week")),display_order:num(fd.get("display_order"))??0,memo:String(fd.get("memo")||""),is_active:true}); setMsg({type:"ok",text:"家事を追加しました。"}); await load();}catch(e){setMsg({type:"error",text:e instanceof Error?e.message:"追加に失敗しました。"})}}
-  async function toggle(t:any){try{const uid=await userId(); const old=logs.find(l=>l.task_name===t.task_name); if(old?.id) await supabase.from("household_logs").update({is_done:!old.is_done,updated_at:new Date().toISOString()}).eq("id",old.id); else await insert("household_logs",{user_id:uid,date:today,task_name:t.task_name,is_done:true,memo:t.memo}); await load();}catch(e){setMsg({type:"error",text:e instanceof Error?e.message:"保存に失敗しました。"})}}
-  return <div className="space-y-6"><Message msg={msg}/><Card><H2>家事テンプレ追加</H2><form action={add} className="mt-5 grid gap-4 md:grid-cols-3"><Input label="タスク名" name="task_name"/><Select label="曜日" name="day_of_week">{dayLabels.map((d,i)=><option key={i} value={i}>{d}</option>)}</Select><Input label="表示順" name="display_order" type="number"/><Input label="メモ" name="memo"/><div className="md:col-span-3"><Btn>追加</Btn></div></form></Card><Card><H2>今日の家事（{dayLabels[dayOfWeek()]}）</H2><div className="mt-4 space-y-3">{templates.map(t=>{const done=!!logs.find(l=>l.task_name===t.task_name)?.is_done; return <button key={t.id} onClick={()=>toggle(t)} className="flex w-full items-center justify-between rounded-2xl border border-slate-200 p-4 text-left"><div><div className="font-bold">{t.task_name}</div><div className="text-sm text-slate-500">{t.memo}</div></div><span className={`rounded-full px-3 py-1 text-xs ${done?"bg-emerald-100 text-emerald-700":"bg-slate-100 text-slate-600"}`}>{done?"完了":"未"}</span></button>})}{templates.length===0&&<div className="text-sm text-slate-500">今日の家事はありません。</div>}</div></Card></div>
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [allTemplates, setAllTemplates] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [msg, setMsg] = useState<Msg>(null);
+  const today = todayISO();
+  const dow = dayOfWeek();
+
+  async function load() {
+    const uid = await userId();
+    const [{ data: todayTemplates }, { data: allTemplateData }, { data: todayLogs }] = await Promise.all([
+      supabase.from("household_templates").select("*").eq("user_id", uid).eq("is_active", true).eq("day_of_week", dow).order("display_order", { ascending: true }),
+      supabase.from("household_templates").select("*").eq("user_id", uid).eq("is_active", true).order("day_of_week", { ascending: true }).order("display_order", { ascending: true }).order("created_at", { ascending: false }),
+      supabase.from("household_logs").select("*").eq("user_id", uid).eq("date", today),
+    ]);
+    setTemplates(todayTemplates ?? []);
+    setAllTemplates(allTemplateData ?? []);
+    setLogs(todayLogs ?? []);
+  }
+
+  useEffect(() => { load().catch((e) => setMsg({ type: "error", text: e.message })); }, []);
+
+  async function add(fd: FormData) {
+    try {
+      const uid = await userId();
+      const taskName = String(fd.get("task_name") || "").trim();
+      if (!taskName) throw new Error("タスク名を入力してください。");
+      await insert("household_templates", {
+        user_id: uid,
+        task_name: taskName,
+        day_of_week: Number(fd.get("day_of_week")),
+        display_order: num(fd.get("display_order")) ?? 0,
+        memo: String(fd.get("memo") || ""),
+        is_active: true,
+      });
+      setMsg({ type: "ok", text: "家事を追加しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "追加に失敗しました。" });
+    }
+  }
+
+  async function updateTemplate(fd: FormData) {
+    if (!editingTemplate?.id) return;
+    try {
+      const taskName = String(fd.get("task_name") || "").trim();
+      if (!taskName) throw new Error("タスク名を入力してください。");
+      const { error } = await supabase.from("household_templates").update({
+        task_name: taskName,
+        day_of_week: Number(fd.get("day_of_week")),
+        display_order: num(fd.get("display_order")) ?? 0,
+        memo: String(fd.get("memo") || ""),
+        updated_at: new Date().toISOString(),
+      }).eq("id", editingTemplate.id);
+      if (error) throw new Error(error.message);
+      setEditingTemplate(null);
+      setMsg({ type: "ok", text: "家事を更新しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "更新に失敗しました。" });
+    }
+  }
+
+  async function deleteTemplate(id: string) {
+    try {
+      const { error } = await supabase.from("household_templates").update({ is_active: false, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw new Error(error.message);
+      if (editingTemplate?.id === id) setEditingTemplate(null);
+      setMsg({ type: "ok", text: "家事を削除しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "削除に失敗しました。" });
+    }
+  }
+
+  async function toggle(t: any) {
+    try {
+      const uid = await userId();
+      const old = logs.find((l) => l.task_name === t.task_name);
+      if (old?.id) {
+        const { error } = await supabase.from("household_logs").update({ is_done: !old.is_done, updated_at: new Date().toISOString() }).eq("id", old.id);
+        if (error) throw new Error(error.message);
+      } else {
+        await insert("household_logs", { user_id: uid, date: today, task_name: t.task_name, is_done: true, memo: t.memo });
+      }
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" });
+    }
+  }
+
+  return <div className="space-y-6"><Message msg={msg}/>
+    <Card><H2>{editingTemplate ? "家事テンプレ編集" : "家事テンプレ追加"}</H2>
+      <form key={editingTemplate?.id ?? "new-household"} action={editingTemplate ? updateTemplate : add} className="mt-5 grid gap-4 md:grid-cols-3">
+        <Input label="タスク名" name="task_name" defaultValue={editingTemplate?.task_name}/>
+        <Select label="曜日" name="day_of_week" defaultValue={editingTemplate?.day_of_week ?? dow}>{dayLabels.map((d, i) => <option key={i} value={i}>{d}</option>)}</Select>
+        <Input label="表示順" name="display_order" type="number" defaultValue={editingTemplate?.display_order ?? 0}/>
+        <Input label="メモ" name="memo" defaultValue={editingTemplate?.memo}/>
+        <div className="flex gap-3 md:col-span-3"><Btn>{editingTemplate ? "更新" : "追加"}</Btn>{editingTemplate && <button type="button" onClick={() => setEditingTemplate(null)} className="rounded-2xl border border-slate-200 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50">キャンセル</button>}</div>
+      </form>
+    </Card>
+
+    <Card><H2>今日の家事（{dayLabels[dow]}）</H2>
+      <div className="mt-4 space-y-3">{templates.map((t) => { const done = !!logs.find((l) => l.task_name === t.task_name)?.is_done; return <button key={t.id} onClick={() => toggle(t)} className="flex w-full items-center justify-between rounded-2xl border border-slate-200 p-4 text-left hover:bg-slate-50"><div><div className="font-bold">{t.task_name}</div><div className="text-sm text-slate-500">{t.memo}</div></div><span className={`rounded-full px-3 py-1 text-xs ${done ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{done ? "完了" : "未"}</span></button>; })}{templates.length === 0 && <div className="text-sm text-slate-500">今日の家事はありません。</div>}</div>
+    </Card>
+
+    <Card><H2>登録済み家事テンプレ</H2>
+      <div className="mt-4 space-y-3">{allTemplates.map((t) => <div key={t.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><div className="font-bold text-slate-900">{t.task_name}</div><div className="mt-1 text-sm text-slate-600">{dayLabels[t.day_of_week]}曜 / 表示順 {t.display_order ?? 0}{t.memo ? ` / ${t.memo}` : ""}</div></div><div className="flex gap-2"><button type="button" onClick={() => setEditingTemplate(t)} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">編集</button><button type="button" onClick={() => deleteTemplate(t.id)} className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">削除</button></div></div></div>)}{allTemplates.length === 0 && <div className="text-sm text-slate-500">登録済みの家事はありません。</div>}</div>
+    </Card>
+  </div>;
 }
 
 export function StudyV5Section() {
