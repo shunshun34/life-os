@@ -1,6 +1,8 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase-server";
 
 export async function saveUserRules(input: {
   wake_up_time: string;
@@ -15,7 +17,7 @@ export async function saveUserRules(input: {
   lunch_break_rule: string;
   extra_rules: string[];
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -33,4 +35,7 @@ export async function saveUserRules(input: {
   );
 
   if (error) throw error;
+
+  revalidatePath("/settings");
+  redirect("/settings");
 }

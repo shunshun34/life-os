@@ -39,3 +39,42 @@ with check (auth.uid() = user_id);
 create policy "user_rules_delete"
 on user_rules for delete
 using (auth.uid() = user_id);
+
+-- 追加ルール用：画面上から登録・編集・削除できる自由項目
+create table if not exists user_rule_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) not null,
+  category text not null default '任意',
+  title text not null,
+  body text not null,
+  sort_order integer not null default 100,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table user_rule_items enable row level security;
+
+create index if not exists user_rule_items_user_id_idx on user_rule_items(user_id);
+create index if not exists user_rule_items_user_category_idx on user_rule_items(user_id, category, sort_order);
+
+drop policy if exists "user_rule_items_select" on user_rule_items;
+drop policy if exists "user_rule_items_insert" on user_rule_items;
+drop policy if exists "user_rule_items_update" on user_rule_items;
+drop policy if exists "user_rule_items_delete" on user_rule_items;
+
+create policy "user_rule_items_select"
+on user_rule_items for select
+using (auth.uid() = user_id);
+
+create policy "user_rule_items_insert"
+on user_rule_items for insert
+with check (auth.uid() = user_id);
+
+create policy "user_rule_items_update"
+on user_rule_items for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "user_rule_items_delete"
+on user_rule_items for delete
+using (auth.uid() = user_id);

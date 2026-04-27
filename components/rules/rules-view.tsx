@@ -1,10 +1,14 @@
+import { RuleItemManager } from "./rule-item-manager";
 import { RulesSection } from "./rules-section";
+import type { RuleItem } from "@/lib/rules/rule-items";
 
 export function RulesView({
   rules,
+  items = [],
   onEditHref = "/settings?mode=edit",
 }: {
   rules: any;
+  items?: RuleItem[];
   onEditHref?: string;
 }) {
   return (
@@ -71,14 +75,11 @@ export function RulesView({
         )}
       </RulesSection>
 
-      <form>
-        <button
-          type="button"
-          className="w-full rounded-2xl bg-slate-900 p-4 text-lg font-bold text-white"
-        >
-          今日守る
-        </button>
-      </form>
+      <RuleItemManager items={items} />
+
+      <div className="rounded-2xl bg-slate-900 p-4 text-center text-lg font-bold text-white">
+        今日守る
+      </div>
     </div>
   );
 }
