@@ -1787,7 +1787,7 @@ export function DashboardV5Section({ onGo }: { onGo: (key: any) => void }) {
     const groomingLogMap = new Map(gl.map((l: any) => [`${l.category}:${l.item_name}`, l]));
     const householdLogMap = new Map(hl.map((l: any) => [l.task_name, l]));
 
-    const checklist = [
+    const checklist: Array<{ section: string; items: any[] }> = [
       { section: "朝", items: rt.filter((x: any) => x.category === "morning").map((x: any) => ({ key: `routine-${x.id}`, label: x.title, done: !!routineLogMap.get(x.id)?.is_done, tab: "routine", type: "routine", template: x })) },
       { section: "昼", items: rt.filter((x: any) => x.category === "noon").map((x: any) => ({ key: `routine-${x.id}`, label: x.title, done: !!routineLogMap.get(x.id)?.is_done, tab: "routine", type: "routine", template: x })) },
       { section: "夜", items: rt.filter((x: any) => x.category === "night").map((x: any) => ({ key: `routine-${x.id}`, label: x.title, done: !!routineLogMap.get(x.id)?.is_done, tab: "routine", type: "routine", template: x })) },
