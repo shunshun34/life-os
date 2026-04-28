@@ -463,6 +463,15 @@ export function RoutineV5Section() {
       <Message msg={msg} />
 
       <Card>
+        <H2>今日のルーティン（{dayLabels[dow]}曜日）</H2>
+        <p className="mt-2 text-sm text-slate-500">今日やる項目だけを上に表示します。タップすると完了/未完了を切り替えます。</p>
+        <div className="mt-4 space-y-3">
+          {todayTemplates.map((t) => <TemplateRow key={t.id} t={t} />)}
+          {todayTemplates.length === 0 && <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">今日の項目はありません。</div>}
+        </div>
+      </Card>
+
+      <Card>
         <H2>{editingTemplate ? "ルーティン編集中" : "ルーティン追加"}</H2>
         <p className="mt-2 text-sm text-slate-500">曜日は数字入力ではなく、文字で選択します。編集時はこのフォームが更新用になります。</p>
         <form key={editingTemplate?.id ?? "new-routine"} action={save} className="mt-5 grid gap-4 md:grid-cols-3">
@@ -483,14 +492,7 @@ export function RoutineV5Section() {
         </form>
       </Card>
 
-      <Card>
-        <H2>今日のルーティン（{dayLabels[dow]}曜日）</H2>
-        <p className="mt-2 text-sm text-slate-500">今日やる項目だけを上に表示します。タップすると完了/未完了を切り替えます。</p>
-        <div className="mt-4 space-y-3">
-          {todayTemplates.map((t) => <TemplateRow key={t.id} t={t} />)}
-          {todayTemplates.length === 0 && <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">今日の項目はありません。</div>}
-        </div>
-      </Card>
+
 
       <Card>
         <H2>全ルーティン管理</H2>
@@ -1486,25 +1488,49 @@ export function WeeklyReviewV5Section() {
 }
 
 export function MoneyV5Section() {
-  const [monthlyLog, setMonthlyLog] = useState<any>(null);
   const [entries, setEntries] = useState<any[]>([]);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [editingSubscription, setEditingSubscription] = useState<any>(null);
   const [msg, setMsg] = useState<Msg>(null);
   const month = monthISO();
   const today = todayISO();
   const yen = (v: number) => new Intl.NumberFormat("ja-JP").format(Math.round(v));
 
+  function monthlyCost(sub: any) {
+    const amount = Number(sub.amount ?? 0);
+    if (sub.cycle === "monthly") return amount;
+    if (sub.cycle === "semiannual") return amount / 6;
+    if (sub.cycle === "annual") return amount / 12;
+    return 0;
+  }
+
+  function yearlyCost(sub: any) {
+    const amount = Number(sub.amount ?? 0);
+    if (sub.cycle === "monthly") return amount * 12;
+    if (sub.cycle === "semiannual") return amount * 2;
+    if (sub.cycle === "annual") return amount;
+    return 0;
+  }
+
+  function cycleText(cycle: string) {
+    if (cycle === "monthly") return "毎月";
+    if (cycle === "semiannual") return "半年に1回";
+    if (cycle === "annual") return "年に1回";
+    return cycle;
+  }
+
   async function load() {
     const uid = await userId();
     const monthStart = month + "-01";
     const monthEnd = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).toISOString().slice(0, 10);
-    const [{ data: monthly, error: monthlyError }, { data: monthEntries, error: entriesError }] = await Promise.all([
-      supabase.from("money_logs").select("*").eq("user_id", uid).eq("month", month).maybeSingle(),
+    const [{ data: monthEntries, error: entriesError }, { data: subData, error: subError }] = await Promise.all([
       supabase.from("money_entries").select("*").eq("user_id", uid).gte("entry_date", monthStart).lte("entry_date", monthEnd).order("entry_date", { ascending: false }).order("created_at", { ascending: false }),
+      supabase.from("subscriptions").select("*").eq("user_id", uid).order("is_active", { ascending: false }).order("created_at", { ascending: false }),
     ]);
-    if (monthlyError) throw new Error(monthlyError.message);
     if (entriesError) throw new Error(entriesError.message);
-    setMonthlyLog(monthly);
+    if (subError) throw new Error(subError.message);
     setEntries(monthEntries ?? []);
+    setSubscriptions(subData ?? []);
   }
 
   useEffect(() => { load().catch(e => setMsg({ type: "error", text: e.message })); }, []);
@@ -1513,7 +1539,19 @@ export function MoneyV5Section() {
   const expenseEntries = entries.filter((e) => e.entry_type === "expense");
   const incomeTotal = incomeEntries.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
   const expenseTotal = expenseEntries.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-  const balance = incomeTotal - expenseTotal;
+  const activeSubscriptions = subscriptions.filter((sub) => sub.is_active !== false);
+  const subscriptionMonthlyTotal = activeSubscriptions.reduce((sum, sub) => sum + monthlyCost(sub), 0);
+  const subscriptionYearlyTotal = activeSubscriptions.reduce((sum, sub) => sum + yearlyCost(sub), 0);
+  const balance = incomeTotal - expenseTotal - subscriptionMonthlyTotal;
+
+  const subscriptionDefault = editingSubscription ?? {
+    name: "",
+    amount: "",
+    cycle: "monthly",
+    category: "",
+    memo: "",
+    is_active: true,
+  };
 
   async function saveEntry(fd: FormData) {
     try {
@@ -1535,23 +1573,61 @@ export function MoneyV5Section() {
     }
   }
 
-  async function saveMonthly(fd: FormData) {
+  async function saveSubscription(fd: FormData) {
     try {
       const uid = await userId();
-      await upsert("money_logs", {
+      const name = String(fd.get("name") || "").trim();
+      if (!name) throw new Error("サブスク名を入力してください。");
+      const payload = {
         user_id: uid,
-        month: String(fd.get("month") || month),
-        income: incomeTotal,
-        expense: expenseTotal,
-        investment: num(fd.get("investment")),
-        nisa_checked: fd.get("nisa_checked") === "on",
+        name,
+        amount: num(fd.get("amount")) ?? 0,
+        cycle: String(fd.get("cycle") || "monthly"),
+        category: String(fd.get("category") || ""),
         memo: String(fd.get("memo") || ""),
+        is_active: fd.get("is_active") === "on",
         updated_at: new Date().toISOString(),
-      }, "user_id,month");
-      setMsg({ type: "ok", text: "NISA・月次確認を保存しました。確認状況に反映しました。" });
+      };
+
+      if (editingSubscription?.id) {
+        const { error } = await supabase.from("subscriptions").update(payload).eq("id", editingSubscription.id);
+        if (error) throw new Error(error.message);
+        setEditingSubscription(null);
+        setMsg({ type: "ok", text: "サブスクを更新しました。" });
+      } else {
+        await insert("subscriptions", payload);
+        setMsg({ type: "ok", text: "サブスクを追加しました。月換算・年換算に反映しました。" });
+      }
       await load();
     } catch (e) {
       setMsg({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました。" });
+    }
+  }
+
+  async function toggleSubscription(sub: any) {
+    try {
+      const { error } = await supabase
+        .from("subscriptions")
+        .update({ is_active: !sub.is_active, updated_at: new Date().toISOString() })
+        .eq("id", sub.id);
+      if (error) throw new Error(error.message);
+      setMsg({ type: "ok", text: !sub.is_active ? "サブスクを有効にしました。" : "サブスクを停止しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "更新に失敗しました。" });
+    }
+  }
+
+  async function deleteSubscription(sub: any) {
+    if (!confirm(`「${sub.name}」を削除しますか？`)) return;
+    try {
+      const { error } = await supabase.from("subscriptions").delete().eq("id", sub.id);
+      if (error) throw new Error(error.message);
+      if (editingSubscription?.id === sub.id) setEditingSubscription(null);
+      setMsg({ type: "ok", text: "サブスクを削除しました。" });
+      await load();
+    } catch (e) {
+      setMsg({ type: "error", text: e instanceof Error ? e.message : "削除に失敗しました。" });
     }
   }
 
@@ -1602,20 +1678,73 @@ export function MoneyV5Section() {
   return <div className="space-y-6">
     <Message msg={msg}/>
 
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-5">
       <Card><div className="text-sm text-slate-500">今月の収入</div><div className="mt-2 text-3xl font-black text-emerald-600">¥{yen(incomeTotal)}</div></Card>
-      <Card><div className="text-sm text-slate-500">今月の支出</div><div className="mt-2 text-3xl font-black text-red-600">¥{yen(expenseTotal)}</div></Card>
-      <Card><div className="text-sm text-slate-500">差分</div><div className={(balance >= 0 ? "text-emerald-600" : "text-red-600") + " mt-2 text-3xl font-black"}>¥{yen(balance)}</div></Card>
-      <Card><div className="text-sm text-slate-500">NISA確認</div><div className={(monthlyLog?.nisa_checked ? "text-emerald-600" : "text-slate-400") + " mt-2 text-2xl font-black"}>{monthlyLog?.nisa_checked ? "確認済み" : "未確認"}</div></Card>
+      <Card><div className="text-sm text-slate-500">今月の支出メモ</div><div className="mt-2 text-3xl font-black text-red-600">¥{yen(expenseTotal)}</div></Card>
+      <Card><div className="text-sm text-slate-500">差分（サブスク込）</div><div className={(balance >= 0 ? "text-emerald-600" : "text-red-600") + " mt-2 text-3xl font-black"}>¥{yen(balance)}</div></Card>
+      <Card><div className="text-sm text-slate-500">サブスク月換算</div><div className="mt-2 text-3xl font-black text-slate-900">¥{yen(subscriptionMonthlyTotal)}</div></Card>
+      <Card><div className="text-sm text-slate-500">サブスク年換算</div><div className="mt-2 text-3xl font-black text-slate-900">¥{yen(subscriptionYearlyTotal)}</div></Card>
     </div>
 
     <Card>
-      <H2>NISA・月次確認状況</H2>
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
-        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">対象月</div><div className="mt-1 text-xl font-black">{monthlyLog?.month ?? month}</div></div>
-        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">投資額</div><div className="mt-1 text-xl font-black">¥{yen(Number(monthlyLog?.investment ?? 0))}</div></div>
-        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">収入/支出</div><div className="mt-1 text-lg font-black">¥{yen(incomeTotal)} / ¥{yen(expenseTotal)}</div></div>
-        <div className="rounded-2xl bg-slate-50 p-4"><div className="text-sm text-slate-500">月次メモ</div><div className="mt-1 font-semibold text-slate-800">{monthlyLog?.memo || "未入力"}</div></div>
+      <H2>{editingSubscription ? "サブスク編集中" : "サブスク追加"}</H2>
+      <p className="mt-2 text-sm text-slate-500">毎月・半年・年1回の固定費を登録します。停止中のものは合計から除外されます。</p>
+      <form key={editingSubscription?.id ?? "new-subscription"} action={saveSubscription} className="mt-5 grid gap-4 md:grid-cols-3">
+        <Input label="サービス名" name="name" defaultValue={subscriptionDefault.name} placeholder="例：YouTube Premium"/>
+        <Input label="金額" name="amount" type="number" defaultValue={subscriptionDefault.amount}/>
+        <Select label="支払い周期" name="cycle" defaultValue={subscriptionDefault.cycle}>
+          <option value="monthly">毎月</option>
+          <option value="semiannual">半年に1回</option>
+          <option value="annual">年に1回</option>
+        </Select>
+        <Input label="カテゴリ" name="category" defaultValue={subscriptionDefault.category} placeholder="動画 / 音楽 / 仕事 / 生活"/>
+        <Input label="メモ" name="memo" defaultValue={subscriptionDefault.memo}/>
+        <label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">
+          <input type="checkbox" name="is_active" defaultChecked={subscriptionDefault.is_active !== false}/>有効
+        </label>
+        <div className="flex gap-3 md:col-span-3">
+          <Btn>{editingSubscription ? "更新" : "追加"}</Btn>
+          {editingSubscription && <button type="button" onClick={() => setEditingSubscription(null)} className="rounded-2xl border border-slate-200 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50">キャンセル</button>}
+        </div>
+      </form>
+    </Card>
+
+    <Card>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <H2>サブスク一覧</H2>
+          <div className="mt-1 text-sm text-slate-500">有効 {activeSubscriptions.length}件 / 全{subscriptions.length}件</div>
+        </div>
+        <div className="text-right text-sm text-slate-500">
+          <div>月換算 <span className="font-black text-slate-900">¥{yen(subscriptionMonthlyTotal)}</span></div>
+          <div>年換算 <span className="font-black text-slate-900">¥{yen(subscriptionYearlyTotal)}</span></div>
+        </div>
+      </div>
+      <div className="mt-4 space-y-3">
+        {subscriptions.map((sub) => (
+          <div key={sub.id} className={(sub.is_active === false ? "opacity-60 " : "") + "rounded-2xl bg-slate-50 p-4 text-sm"}>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="font-bold text-slate-900">{sub.name}</div>
+                  <span className={(sub.is_active === false ? "bg-slate-200 text-slate-600" : "bg-emerald-100 text-emerald-700") + " rounded-full px-2 py-1 text-xs font-bold"}>{sub.is_active === false ? "停止中" : "有効"}</span>
+                </div>
+                <div className="mt-1 text-slate-500">¥{yen(Number(sub.amount ?? 0))} / {cycleText(sub.cycle)} {sub.category ? ` / ${sub.category}` : ""}</div>
+                {sub.memo ? <div className="mt-1 text-slate-600">{sub.memo}</div> : null}
+              </div>
+              <div className="text-left md:text-right">
+                <div className="font-black text-slate-900">月換算 ¥{yen(monthlyCost(sub))}</div>
+                <div className="text-slate-500">年換算 ¥{yen(yearlyCost(sub))}</div>
+                <div className="mt-3 flex flex-wrap gap-2 md:justify-end">
+                  <button type="button" onClick={() => toggleSubscription(sub)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">{sub.is_active === false ? "有効化" : "停止"}</button>
+                  <button type="button" onClick={() => setEditingSubscription(sub)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">編集</button>
+                  <button type="button" onClick={() => deleteSubscription(sub)} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">削除</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {subscriptions.length === 0 && <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">サブスクはまだ登録されていません。</div>}
       </div>
     </Card>
 
@@ -1630,17 +1759,6 @@ export function MoneyV5Section() {
         <Input label="タイトル" name="title" placeholder="例：昼食、制汗剤、交通費"/>
         <Input label="メモ" name="memo"/>
         <div className="md:col-span-2"><Btn>メモ追加</Btn></div>
-      </form>
-    </Card>
-
-    <Card>
-      <H2>NISA・月次確認を登録</H2>
-      <form action={saveMonthly} className="mt-5 grid gap-4 md:grid-cols-2">
-        <Input label="月" name="month" type="month" defaultValue={monthlyLog?.month ?? month}/>
-        <Input label="投資額" name="investment" type="number" defaultValue={monthlyLog?.investment}/>
-        <label className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4"><input type="checkbox" name="nisa_checked" defaultChecked={!!monthlyLog?.nisa_checked}/>NISA確認済み</label>
-        <Input label="月次メモ" name="memo" defaultValue={monthlyLog?.memo}/>
-        <div className="md:col-span-2"><Btn>月次確認を保存</Btn></div>
       </form>
     </Card>
 

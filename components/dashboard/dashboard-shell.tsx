@@ -85,7 +85,7 @@ const TAB_ACCENTS: Record<
     gradient: "from-yellow-100 via-lime-50 to-green-100",
     badge: "Life OS Ver.5",
     title: "お金",
-    subtitle: "月1収支とNISA確認",
+    subtitle: "収支メモとサブスク管理",
   },
   settings: {
     gradient: "from-slate-100 via-blue-50 to-indigo-100",
